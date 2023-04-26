@@ -1,13 +1,13 @@
 CFLAGS = -std=c++17 -O2
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
-vulkanApp: main.cpp
+compile: main.cpp
 	g++ $(CFLAGS) -o vulkanApp main.cpp $(LDFLAGS)
 
 .PHONY:
 	test clean
 
-test: vulkanApp
+run: vulkanApp
 	./vulkanApp
 
 clean:
