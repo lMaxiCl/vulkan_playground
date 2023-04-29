@@ -65,7 +65,17 @@ class TriangleApplication{
 
 		void setupDebugMessengerEXT(){
 			if(!enableValidationLayers) return;
+
 			VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+			populateDebugMessengerCreateInfo(createInfo);
+
+			if(CreateDebugMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS){
+				throw std::runtime_error("Failed to set up debug messenger!");
+			}
+		}
+
+		void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
+			createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 			createInfo.messageSeverity = 
 				VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
@@ -77,31 +87,38 @@ class TriangleApplication{
 				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 			createInfo.pfnUserCallback = debugCallback;
 			createInfo.pUserData = nullptr;
-			if(CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS){
-				throw std::runtime_error("Failed to set up debug messenger!");
-			}
+			createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 		}
 
-		void DestroyDebugMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
-			if(!enableValidationLayers) return;
-			auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-			if(func != nullptr){
-				func(instance, debugMessenger, pAllocator);
-			}
-		}
+		void DestroyDebugMessengerEXT(VkInstance instance,
+				VkDebugUtilsMessengerEXT debugMessenger,
+				const VkAllocationCallbacks* pAllocator){
+					if(!enableValidationLayers) return;
 
-		VkResult CreateDebugUtilsMessengerEXT(
+					auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)
+						vkGetInstanceProcAddr(instance,	
+								"vkDestroyDebugUtilsMessengerEXT");
+
+					if(func != nullptr){
+						func(instance, debugMessenger, pAllocator);
+					}
+				}
+
+		VkResult CreateDebugMessengerEXT(
 				VkInstance instance,
 				const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
 				const VkAllocationCallbacks* pAllocator,
 				VkDebugUtilsMessengerEXT* pDebugMessenger){
-			auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-			if(func != nullptr){
-				return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-			}else{
-				return VK_ERROR_EXTENSION_NOT_PRESENT;
-			}
-		}
+
+					auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+						vkGetInstanceProcAddr(instance,
+								"vkCreateDebugUtilsMessengerEXT");
+					if(func != nullptr){
+						return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+					}else{
+						return VK_ERROR_EXTENSION_NOT_PRESENT;
+					}
+				}
 
 		std::vector<const char*> getRequiredExtensions(){
 			uint32_t glfwExtensionCount = 0;
@@ -138,10 +155,25 @@ class TriangleApplication{
 			appInfo.pEngineName = "none";
 			appInfo.engineVersion = VK_MAKE_VERSION(1,0,0);
 			appInfo.apiVersion = VK_API_VERSION_1_0;
+
 			VkInstanceCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 			createInfo.pApplicationInfo = &appInfo;
 			
+			VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+
+
+			if(enableValidationLayers){
+				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+				createInfo.ppEnabledLayerNames = validationLayers.data();
+				populateDebugMessengerCreateInfo(debugCreateInfo);
+				createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
+			}else{
+				createInfo.enabledLayerCount=0;
+				createInfo.pNext = nullptr;
+			}
+
+
 			if(enableValidationLayers){
 				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 				createInfo.ppEnabledLayerNames = validationLayers.data();
@@ -187,7 +219,8 @@ class TriangleApplication{
 
 		void cleanup(){
 			if(enableValidationLayers){
-				DestroyDebugMessengerEXT(instance, debugMessenger, nullptr);}
+				DestroyDebugMessengerEXT(instance, debugMessenger, nullptr);
+				}
 			vkDestroyInstance(instance, nullptr);
 			glfwDestroyWindow(window);
 			glfwTerminate();
