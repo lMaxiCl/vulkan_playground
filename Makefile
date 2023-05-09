@@ -8,7 +8,6 @@ compile: main.cpp
 	test clean
 
 run: vulkanApp
-	./vulkanApp
-
+	./vulkanApp __NV_PRIME_RENDER_OFFLOAD=1 vkcube 
 clean:
 	rm -f VulkanApp

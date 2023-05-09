@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <optional>
+#include <set>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -27,9 +28,10 @@ const std::vector<const char*> validationLayers = {
 
 struct QueueFamilyIndeces{
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
 
 	bool isComplete(){
-		return graphicsFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
 
@@ -80,6 +82,10 @@ class TriangleApplication{
 		VkDevice device;
 		//vulkan queue
 		VkQueue graphicsQueue;
+		//object for linking window to vulkan
+		VkSurfaceKHR surface;
+		//vkQueue for presentation device queue handling
+		VkQueue presentQueue;
 
 		//debuging messenger extension setup
 		void setupDebugMessengerEXT(){
@@ -93,6 +99,7 @@ class TriangleApplication{
 			}
 		}
 
+		//debugMessenger
 		//creating createIngo for debug messenger initialization
 		void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
 			createInfo = {};
@@ -142,6 +149,17 @@ class TriangleApplication{
 					}
 				}
 
+		//window
+		//debug callback. for proper debug messenger work
+		static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+			VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+			VkDebugUtilsMessageTypeFlagsEXT messageType,
+			const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+			void* pUserData){
+				std::cerr<<"Validation layer: "<<pCallbackData->pMessage<<std::endl;
+				return VK_FALSE;
+		}
+	
 		//obtainig extensions for glfw window
 		std::vector<const char*> getRequiredExtensions(){
 			uint32_t glfwExtensionCount = 0;
@@ -154,18 +172,17 @@ class TriangleApplication{
 			}
 
 			return extensions;
+		}	
+
+		void createSurface(){
+			if(glfwCreateWindowSurface(instance, window, nullptr, &surface)!=VK_SUCCESS){
+				throw std::runtime_error("Failed to create window surface!");
+			}
+
+
 		}
-	
-		//debug callback. for proper debug messenger work
-		static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-			VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-			VkDebugUtilsMessageTypeFlagsEXT messageType,
-			const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-			void* pUserData){
-				std::cerr<<"Validation layer: "<<pCallbackData->pMessage<<std::endl;
-				return VK_FALSE;
-		}
-		
+
+		//vulkan itself
 		// creation of vulkan instance
 		void createInstance(){
 			if(enableValidationLayers && !checkValidationLayersSupport()){
@@ -264,9 +281,16 @@ class TriangleApplication{
 			
 			int i = 0;
 			for(const auto& queueFamily:queueFamilies){
+				VkBool32 presentSupport=false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
 				if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT){
 					indeces.graphicsFamily = i;
+
 				}
+				if(presentSupport){
+					indeces.presentFamily = i;
+				}
+
 
 				i++;
 				if(indeces.isComplete()){
@@ -301,45 +325,39 @@ class TriangleApplication{
 		bool isDeviceSuitable(VkPhysicalDevice device){
 			QueueFamilyIndeces indeces = findQueueFamilies(device);
 
-			//Works only for indeces or device properties & features (IDK why... yet)
-			//
-			//VkPhysicalDeviceProperties deviceProperties;
-			//vkGetPhysicalDeviceProperties(device, &deviceProperties);
-			//VkPhysicalDeviceFeatures deviceFeatures;
-			//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-			//
 			return indeces.isComplete();
-				//
-			  	//deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-				//deviceFeatures.geometryShader;
-				//
 		}
 		
 		//creating logical device
 		void createLogicalDevice(){
 			QueueFamilyIndeces indeces = findQueueFamilies(physicalDevice);
 			
-			VkDeviceQueueCreateInfo queueCreateInfo{};
-			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			queueCreateInfo.queueFamilyIndex = indeces.graphicsFamily.value();
-			queueCreateInfo.queueCount = 1;
+			std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+			std::set<uint32_t> uniqueQueueFamilies = {indeces.graphicsFamily.value(), indeces.presentFamily.value()};
 
 			float queuePriority = 1.0f;
-			queueCreateInfo.pQueuePriorities = &queuePriority;
 
+			for (uint32_t queueFamily : uniqueQueueFamilies) {
+				VkDeviceQueueCreateInfo queueCreateInfo{};
+				queueCreateInfo.queueFamilyIndex = queueFamily;
+				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				queueCreateInfo.queueFamilyIndex = indeces.graphicsFamily.value();
+				queueCreateInfo.queueCount = 1;
+				queueCreateInfo.pQueuePriorities = &queuePriority;
+				queueCreateInfos.push_back(queueCreateInfo);
+			}
 			VkPhysicalDeviceFeatures deviceFeatures{};
 			
 			VkDeviceCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-			createInfo.pQueueCreateInfos = &queueCreateInfo;
-			createInfo.queueCreateInfoCount = 1;
+			createInfo.pQueueCreateInfos = queueCreateInfos.data();
+			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 
 			createInfo.pEnabledFeatures = &deviceFeatures;
 
 			//for older implementations there is a good practice to include validation layers
 			if (enableValidationLayers){
 				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-				createInfo.ppEnabledLayerNames = validationLayers.data();
 			}else{
 				createInfo.enabledLayerCount = 0;
 			}	
@@ -348,9 +366,10 @@ class TriangleApplication{
 				throw std::runtime_error("Failed to create logical device!");
 			}
 
-			vkGetDeviceQueue(device, indeces.graphicsFamily.value(), 0, &graphicsQueue);
+			vkGetDeviceQueue(device, indeces.presentFamily.value(), 0, &presentQueue);
 		}
-
+		
+		//general
 		//glfw window initialization
 		void initWindow(){
 			glfwInit();
@@ -363,6 +382,7 @@ class TriangleApplication{
 		void initVulkan(){
 			createInstance();
 			setupDebugMessengerEXT();
+			createSurface();
 			pickPhysicalDevice();
 			createLogicalDevice();
 		};
@@ -379,6 +399,7 @@ class TriangleApplication{
 			if(enableValidationLayers){
 				DestroyDebugMessengerEXT(instance, debugMessenger, nullptr);
 				}
+			vkDestroySurfaceKHR(instance, surface, nullptr);
 			vkDestroyInstance(instance, nullptr);
 			glfwDestroyWindow(window);
 			glfwTerminate();
