@@ -87,6 +87,43 @@ class TriangleApplication{
 		//vkQueue for presentation device queue handling
 		VkQueue presentQueue;
 
+		//general
+		//glfw window initialization
+		void initWindow(){
+			glfwInit();
+			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+			window = glfwCreateWindow(WIDTH, HEIGHT, "Vulcan", nullptr, nullptr);
+		}
+
+		//vulkan initialization
+		void initVulkan(){
+			createInstance();
+			setupDebugMessengerEXT();
+			createSurface();
+			pickPhysicalDevice();
+			createLogicalDevice();
+		};
+
+		//main loop of an application
+		void mainloop(){
+			while(!glfwWindowShouldClose(window)){
+				glfwPollEvents();
+			}
+		};
+
+		//cleanup (memory reallocation etc.)
+		void cleanup(){
+			vkDestroyDevice(device, nullptr);
+			if(enableValidationLayers){
+				DestroyDebugMessengerEXT(instance, debugMessenger, nullptr);
+				}
+			vkDestroySurfaceKHR(instance, surface, nullptr);
+			vkDestroyInstance(instance, nullptr);
+			glfwDestroyWindow(window);
+			glfwTerminate();
+		};
+
 		//debuging messenger extension setup
 		void setupDebugMessengerEXT(){
 			if(!enableValidationLayers) return;
@@ -369,42 +406,7 @@ class TriangleApplication{
 			vkGetDeviceQueue(device, indeces.presentFamily.value(), 0, &presentQueue);
 		}
 		
-		//general
-		//glfw window initialization
-		void initWindow(){
-			glfwInit();
-			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-			window = glfwCreateWindow(WIDTH, HEIGHT, "Vulcan", nullptr, nullptr);
-		}
-
-		//vulkan initialization
-		void initVulkan(){
-			createInstance();
-			setupDebugMessengerEXT();
-			createSurface();
-			pickPhysicalDevice();
-			createLogicalDevice();
-		};
-
-		//main loop of an application
-		void mainloop(){
-			while(!glfwWindowShouldClose(window)){
-				glfwPollEvents();
-			}
-		};
-
-		//cleanup (memory reallocation etc.)
-		void cleanup(){
-			if(enableValidationLayers){
-				DestroyDebugMessengerEXT(instance, debugMessenger, nullptr);
-				}
-			vkDestroySurfaceKHR(instance, surface, nullptr);
-			vkDestroyInstance(instance, nullptr);
-			glfwDestroyWindow(window);
-			glfwTerminate();
-			vkDestroyDevice(device, nullptr);
-		};	
+	
 };
 
 int main() {
