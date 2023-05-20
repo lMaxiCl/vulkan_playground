@@ -12,6 +12,9 @@
 #include <cstdlib>
 #include <optional>
 #include <set>
+#include <limits>
+#include <cstdint>
+#include <algorithm>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -30,6 +33,12 @@ const std::vector<const char*> deviceExtensions = {
 	const bool enableValidationLayers = true;
 #endif
 
+struct SwapchainSupportDetails{
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+};
+
 struct QueueFamilyIndeces{
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
@@ -38,6 +47,8 @@ struct QueueFamilyIndeces{
 		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
+
+
 
 bool checkValidationLayersSupport(){
 	uint32_t layerCount;
@@ -86,11 +97,10 @@ class TriangleApplication{
 		VkDevice device;
 		//vulkan queue
 		VkQueue graphicsQueue;
+		VkQueue presentQueue;
 		//object for linking window to vulkan
 		VkSurfaceKHR surface;
 		//vkQueue for presentation device queue handling
-		VkQueue presentQueue;
-
 		//general
 		//glfw window initialization
 		void initWindow(){
@@ -107,6 +117,7 @@ class TriangleApplication{
 			createSurface();
 			pickPhysicalDevice();
 			createLogicalDevice();
+			createSwapChain();
 		};
 
 		//main loop of an application
@@ -278,7 +289,29 @@ class TriangleApplication{
 			}
 		};
 
+		SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device){
+			SwapchainSupportDetails details;
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+			
+			uint32_t formatCount;
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
 
+			if(formatCount !=0){
+				details.formats.resize(formatCount);
+				vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+			}
+			
+			uint32_t presentModesCount;
+
+			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModesCount, nullptr);
+
+			if(presentModesCount!=0){
+				details.presentModes.resize(presentModesCount);
+				vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModesCount, details.presentModes.data());
+			}
+
+			return details;
+		};
 
 		// choosing physical device with vulkan support and highest rating
 		void pickPhysicalDevice(){
@@ -363,8 +396,16 @@ class TriangleApplication{
 		//checking if device is suitable for our needs
 		bool isDeviceSuitable(VkPhysicalDevice device){
 			QueueFamilyIndeces indeces = findQueueFamilies(device);
+
 			bool extensionsSupported = checkDeviceExtensionsSupport(device);
-			return indeces.isComplete() && extensionsSupported;
+			
+			bool swapChainAdequate = false;
+			if(extensionsSupported){
+				SwapchainSupportDetails swapChainSupport = querySwapchainSupport(device);
+				swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+			}
+
+			return indeces.isComplete() && extensionsSupported && swapChainAdequate;
 		}
 
 		bool checkDeviceExtensionsSupport(VkPhysicalDevice device){
@@ -423,6 +464,60 @@ class TriangleApplication{
 			}
 
 			vkGetDeviceQueue(device, indeces.presentFamily.value(), 0, &presentQueue);
+		}
+
+		//swapchain
+		//swapchain creation
+		void createSwapChain(){
+			SwapchainSupportDetails swapChainSupport = querySwapchainSupport(physicalDevice);
+			VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+			VkPresentModeKHR presentMode = choseSwapPresentMode(swapChainSupport.presentModes);
+			VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+		};
+		//swapchain settings
+		//surface format(color depth)
+		VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats){
+		//TODO:make posibility to setup formats from outside
+			for(const auto& availableFormat:availableFormats){
+				if(availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR){
+					return availableFormat;
+				}
+			}
+			return availableFormats[0];
+		};
+
+
+		//presentations modes(vsync)
+		VkPresentModeKHR choseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes){
+		//TODO:make posibility to setup modes from outside
+			for(const auto& availablePresentMode:availablePresentModes){
+				if(availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR){
+					return availablePresentMode;
+				}
+			}
+			return VK_PRESENT_MODE_FIFO_KHR;
+		};
+
+		//swap extent(resolution of images in swapchain)
+		VkExtent2D chooseSwapExtent (const VkSurfaceCapabilitiesKHR capabilities){
+			if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()){
+				return capabilities.currentExtent;	
+			}else{
+				int width, height;	
+				glfwGetFramebufferSize(window, &width, &height);
+
+				VkExtent2D actualExtent = {
+				static_cast<uint32_t>(width),
+				static_cast<uint32_t>(height)
+				};
+
+				actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+				actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+
+				return actualExtent;
+			}
+
 		}
 };
 
